@@ -230,6 +230,41 @@
             box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
         }
 
+        .direction-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .direction-btn {
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .direction-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .direction-btn.active {
+            background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
+            border-color: #00d4ff;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+        }
+
+        .direction-btn.disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
         .instruction-text {
             text-align: center;
             padding: 15px;
@@ -462,10 +497,10 @@
 
             <div style="margin-top: 20px; font-size: 0.9em; opacity: 0.7;">
                 <p><strong>Quick Rules:</strong></p>
-                <p>• Click frontline segments to deploy forces</p>
-                <p>• 100 forces per turn, max 25 per segment</p>
+                <p>• Click frontline cells to deploy forces</p>
+                <p>• Choose attack direction with arrows</p>
+                <p>• 100 forces per turn, max 25 per cell</p>
                 <p>• Win by controlling 75% of territory</p>
-                <p>• Use momentum bonuses and scouting wisely</p>
             </div>
         </div>
     </div>
@@ -532,19 +567,34 @@
 
                     <!-- Segment Editor -->
                     <div id="segmentEditor" class="segment-editor hidden">
-                        <div class="editor-header">Segment <span id="selectedSegmentNum">-</span></div>
+                        <div class="editor-header">Cell <span id="selectedSegmentNum">-</span></div>
                         <div class="editor-controls">
                             <div class="number-input-group">
                                 <label style="opacity: 0.8;">Forces:</label>
                                 <input type="number" id="forceInput" class="number-input" min="0" max="25" value="0">
                             </div>
                             <input type="range" id="forceSlider" class="slider" min="0" max="25" value="0">
+
+                            <div style="margin-top: 10px;">
+                                <label style="opacity: 0.8; font-size: 0.9em;">Attack Direction:</label>
+                                <div class="direction-selector">
+                                    <div></div>
+                                    <div class="direction-btn" data-dir="up" onclick="selectDirection('up')">⬆️</div>
+                                    <div></div>
+                                    <div class="direction-btn" data-dir="left" onclick="selectDirection('left')">⬅️</div>
+                                    <div></div>
+                                    <div class="direction-btn" data-dir="right" onclick="selectDirection('right')">➡️</div>
+                                    <div></div>
+                                    <div class="direction-btn" data-dir="down" onclick="selectDirection('down')">⬇️</div>
+                                    <div></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="instruction-text">
-                        💡 <strong>Click on any frontline segment</strong> to assign forces.<br>
-                        Numbers show your current deployment.
+                        💡 <strong>Click frontline cells</strong> to deploy forces.<br>
+                        Choose direction with arrows. Type numbers directly!
                     </div>
                 </div>
 
@@ -556,7 +606,7 @@
                             🔍 Scout enemy forces (costs 10 points)
                         </div>
                         <div style="font-size: 0.85em; margin-bottom: 10px; opacity: 0.7;">
-                            Enable scouting, then click a segment
+                            Enable scouting, then click a cell
                         </div>
                         <div id="scoutingMode" style="font-weight: bold; color: #ffc107;">
                             Scouting: OFF
@@ -588,8 +638,7 @@
         // Game State
         let gameState = {
             grid: [],
-            frontline: [],
-            frontlineSegments: [], // All cells that are part of frontline
+            frontlineCells: new Set(),
             turn: 1,
             currentPlayer: 1,
             player1Deployment: new Map(),
@@ -600,23 +649,67 @@
             player2Momentum: 0,
             scoutingMode: false,
             selectedSegment: null,
+            selectedDirection: null,
             gameMode: 'pvp',
             aiDifficulty: 'medium',
             waitingForPlayer: false,
-            strobeInterval: null
+            strobeInterval: null,
+            particles: []
         };
 
         // Canvas
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
+        // Particle class for explosions
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 8;
+                this.vy = (Math.random() - 0.5) * 8;
+                this.life = 1.0;
+                this.decay = 0.02;
+                this.size = Math.random() * 4 + 2;
+                this.color = color;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.3; // gravity
+                this.life -= this.decay;
+                return this.life > 0;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
         // Initialize Game
         function initGame() {
             gameState.grid = Array(GRID_HEIGHT).fill(null).map(() => Array(GRID_WIDTH).fill(0));
-            gameState.frontline = Array(GRID_HEIGHT).fill(Math.floor(GRID_WIDTH / 2));
 
-            updateTerritories();
-            identifyFrontlineSegments();
+            // Initialize with vertical line down middle
+            const midX = Math.floor(GRID_WIDTH / 2);
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    if (x < midX) {
+                        gameState.grid[y][x] = 1;
+                    } else if (x > midX) {
+                        gameState.grid[y][x] = 2;
+                    }
+                }
+            }
+
+            identifyFrontlineCells();
 
             gameState.player1Deployment = new Map();
             gameState.player2Deployment = new Map();
@@ -627,61 +720,62 @@
             updateUI();
         }
 
-        function updateTerritories() {
+        // Find all cells on the frontline (adjacent to enemy territory)
+        function identifyFrontlineCells() {
+            gameState.frontlineCells = new Set();
+
             for (let y = 0; y < GRID_HEIGHT; y++) {
                 for (let x = 0; x < GRID_WIDTH; x++) {
-                    if (x < gameState.frontline[y]) {
-                        gameState.grid[y][x] = 1;
-                    } else if (x > gameState.frontline[y]) {
-                        gameState.grid[y][x] = 2;
-                    } else {
-                        gameState.grid[y][x] = 0;
-                    }
-                }
-            }
-        }
+                    const cell = gameState.grid[y][x];
+                    if (cell === 0) continue; // Empty cell
 
-        // Identify all frontline segments including connected neighbors
-        function identifyFrontlineSegments() {
-            const segments = new Set();
+                    // Check if adjacent to enemy territory
+                    const neighbors = [
+                        {x: x-1, y: y},
+                        {x: x+1, y: y},
+                        {x: x, y: y-1},
+                        {x: x, y: y+1}
+                    ];
 
-            for (let y = 0; y < GRID_HEIGHT; y++) {
-                const x = gameState.frontline[y];
-                const key = `${x},${y}`;
-                segments.add(key);
-            }
-
-            gameState.frontlineSegments = segments;
-        }
-
-        // Smooth frontline to ensure continuity
-        function smoothFrontline(frontline) {
-            const smoothed = [...frontline];
-            let changed = true;
-            let iterations = 0;
-            const maxIterations = 5;
-
-            while (changed && iterations < maxIterations) {
-                changed = false;
-                iterations++;
-
-                for (let y = 1; y < GRID_HEIGHT - 1; y++) {
-                    const prev = smoothed[y - 1];
-                    const curr = smoothed[y];
-                    const next = smoothed[y + 1];
-
-                    // If current position is more than 1 cell away from neighbors, adjust
-                    if (Math.abs(curr - prev) > 1 || Math.abs(curr - next) > 1) {
-                        const avg = Math.round((prev + next) / 2);
-                        if (Math.abs(avg - curr) > 1) {
-                            smoothed[y] = avg;
-                            changed = true;
+                    for (let n of neighbors) {
+                        if (n.x >= 0 && n.x < GRID_WIDTH && n.y >= 0 && n.y < GRID_HEIGHT) {
+                            const neighborCell = gameState.grid[n.y][n.x];
+                            if (neighborCell !== 0 && neighborCell !== cell) {
+                                const key = `${x},${y}`;
+                                gameState.frontlineCells.add(key);
+                                break;
+                            }
                         }
                     }
                 }
             }
+        }
 
-            return smoothed;
+        // Get available directions for a cell
+        function getAvailableDirections(x, y) {
+            const player = gameState.grid[y][x];
+            const directions = [];
+
+            const checks = [
+                {dir: 'up', dx: 0, dy: -1},
+                {dir: 'down', dx: 0, dy: 1},
+                {dir: 'left', dx: -1, dy: 0},
+                {dir: 'right', dx: 1, dy: 0}
+            ];
+
+            for (let check of checks) {
+                const nx = x + check.dx;
+                const ny = y + check.dy;
+
+                if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
+                    const neighbor = gameState.grid[ny][nx];
+                    if (neighbor !== player && neighbor !== 0) {
+                        directions.push(check.dir);
+                    }
+                }
+            }
+
+            return directions;
         }
 
         function selectSegment(x, y) {
@@ -691,21 +785,74 @@
             }
 
             const key = `${x},${y}`;
-            if (!gameState.frontlineSegments.has(key)) return;
+            const player = gameState.grid[y][x];
+
+            if (player !== gameState.currentPlayer) return;
+            if (!gameState.frontlineCells.has(key)) return;
 
             gameState.selectedSegment = key;
 
             const deployment = gameState.currentPlayer === 1 ?
                 gameState.player1Deployment : gameState.player2Deployment;
 
-            const currentForces = deployment.get(key) || 0;
+            const currentData = deployment.get(key) || {forces: 0, direction: null};
 
             document.getElementById('segmentEditor').classList.remove('hidden');
             document.getElementById('selectedSegmentNum').textContent = `(${x}, ${y})`;
-            document.getElementById('forceInput').value = currentForces;
-            document.getElementById('forceSlider').value = currentForces;
+            document.getElementById('forceInput').value = currentData.forces;
+            document.getElementById('forceSlider').value = currentData.forces;
+
+            // Update direction buttons
+            const availableDirections = getAvailableDirections(x, y);
+            document.querySelectorAll('.direction-btn').forEach(btn => {
+                const dir = btn.getAttribute('data-dir');
+                if (dir) {
+                    btn.classList.remove('active', 'disabled');
+                    if (!availableDirections.includes(dir)) {
+                        btn.classList.add('disabled');
+                    } else if (dir === currentData.direction) {
+                        btn.classList.add('active');
+                    }
+                }
+            });
+
+            gameState.selectedDirection = currentData.direction;
 
             startStrobing();
+            render();
+        }
+
+        function selectDirection(dir) {
+            if (!gameState.selectedSegment) return;
+
+            const [x, y] = gameState.selectedSegment.split(',').map(Number);
+            const availableDirections = getAvailableDirections(x, y);
+
+            if (!availableDirections.includes(dir)) return;
+
+            gameState.selectedDirection = dir;
+
+            document.querySelectorAll('.direction-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`.direction-btn[data-dir="${dir}"]`).classList.add('active');
+
+            updateDeploymentDirection();
+        }
+
+        function updateDeploymentDirection() {
+            if (!gameState.selectedSegment || !gameState.selectedDirection) return;
+
+            const deployment = gameState.currentPlayer === 1 ?
+                gameState.player1Deployment : gameState.player2Deployment;
+
+            const currentData = deployment.get(gameState.selectedSegment) || {forces: 0, direction: null};
+            currentData.direction = gameState.selectedDirection;
+
+            if (currentData.forces > 0) {
+                deployment.set(gameState.selectedSegment, currentData);
+            }
+
             render();
         }
 
@@ -738,11 +885,11 @@
             const momentum = gameState.currentPlayer === 1 ?
                 gameState.player1Momentum : gameState.player2Momentum;
 
-            const currentInSegment = deployment.get(gameState.selectedSegment) || 0;
+            const currentData = deployment.get(gameState.selectedSegment) || {forces: 0, direction: null};
             let totalOthers = 0;
-            for (let [key, val] of deployment) {
+            for (let [key, data] of deployment) {
                 if (key !== gameState.selectedSegment) {
-                    totalOthers += val;
+                    totalOthers += data.forces;
                 }
             }
 
@@ -752,7 +899,10 @@
             }
 
             if (value > 0) {
-                deployment.set(gameState.selectedSegment, value);
+                deployment.set(gameState.selectedSegment, {
+                    forces: value,
+                    direction: currentData.direction || gameState.selectedDirection
+                });
             } else {
                 deployment.delete(gameState.selectedSegment);
             }
@@ -763,6 +913,26 @@
             updateUI();
             render();
         }
+
+        // Direct keyboard input
+        document.addEventListener('keydown', (e) => {
+            if (!gameState.selectedSegment) return;
+            if (document.activeElement.tagName === 'INPUT') return;
+
+            if (e.key >= '0' && e.key <= '9') {
+                const input = document.getElementById('forceInput');
+                const currentValue = input.value;
+                const newValue = currentValue + e.key;
+                input.value = newValue;
+                updateSelectedSegmentForces(newValue);
+            } else if (e.key === 'Backspace') {
+                e.preventDefault();
+                const input = document.getElementById('forceInput');
+                const newValue = Math.floor(parseInt(input.value) / 10) || 0;
+                input.value = newValue;
+                updateSelectedSegmentForces(newValue);
+            }
+        });
 
         document.addEventListener('DOMContentLoaded', () => {
             const forceInput = document.getElementById('forceInput');
@@ -783,6 +953,7 @@
 
             deployment.clear();
             gameState.selectedSegment = null;
+            gameState.selectedDirection = null;
             document.getElementById('segmentEditor').classList.add('hidden');
             stopStrobing();
 
@@ -793,12 +964,13 @@
         function toggleScouting() {
             gameState.scoutingMode = !gameState.scoutingMode;
             document.getElementById('scoutingMode').textContent =
-                gameState.scoutingMode ? 'Scouting: ON (click segment)' : 'Scouting: OFF';
+                gameState.scoutingMode ? 'Scouting: ON (click cell)' : 'Scouting: OFF';
             document.getElementById('scoutingMode').style.color =
                 gameState.scoutingMode ? '#4caf50' : '#ffc107';
 
             if (gameState.scoutingMode) {
                 gameState.selectedSegment = null;
+                gameState.selectedDirection = null;
                 document.getElementById('segmentEditor').classList.add('hidden');
                 stopStrobing();
             }
@@ -806,7 +978,10 @@
 
         function handleScouting(x, y) {
             const key = `${x},${y}`;
-            if (!gameState.frontlineSegments.has(key)) return;
+            const player = gameState.grid[y][x];
+
+            if (player !== gameState.currentPlayer) return;
+            if (!gameState.frontlineCells.has(key)) return;
 
             const deployment = gameState.currentPlayer === 1 ?
                 gameState.player1Deployment : gameState.player2Deployment;
@@ -818,13 +993,13 @@
                 gameState.player1Momentum : gameState.player2Momentum;
 
             if (scouted.has(key)) {
-                alert('You have already scouted this segment!');
+                alert('You have already scouted this cell!');
                 return;
             }
 
             let totalDeployed = 0;
-            for (let val of deployment.values()) {
-                totalDeployed += val;
+            for (let data of deployment.values()) {
+                totalDeployed += data.forces;
             }
 
             const remaining = FORCES_PER_TURN + momentum - totalDeployed;
@@ -837,14 +1012,14 @@
             let costRemaining = SCOUTING_COST;
             const entries = Array.from(deployment.entries()).reverse();
 
-            for (let [segKey, forces] of entries) {
+            for (let [segKey, data] of entries) {
                 if (costRemaining <= 0) break;
 
-                const reduction = Math.min(forces, costRemaining);
-                const newForces = forces - reduction;
+                const reduction = Math.min(data.forces, costRemaining);
+                const newForces = data.forces - reduction;
 
                 if (newForces > 0) {
-                    deployment.set(segKey, newForces);
+                    deployment.set(segKey, {...data, forces: newForces});
                 } else {
                     deployment.delete(segKey);
                 }
@@ -853,8 +1028,10 @@
             }
 
             scouted.add(key);
-            const enemyForces = enemyDeployment.get(key) || 0;
-            alert(`Enemy forces at (${x}, ${y}): ${enemyForces}`);
+            const enemyData = enemyDeployment.get(key);
+            const enemyForces = enemyData ? enemyData.forces : 0;
+            const enemyDir = enemyData ? enemyData.direction : 'none';
+            alert(`Enemy at (${x}, ${y}):\nForces: ${enemyForces}\nDirection: ${enemyDir || 'none'}`);
 
             gameState.scoutingMode = false;
             document.getElementById('scoutingMode').textContent = 'Scouting: OFF';
@@ -869,9 +1046,19 @@
                 gameState.player1Deployment : gameState.player2Deployment;
 
             let totalForces = 0;
-            for (let val of deployment.values()) {
-                totalForces += val;
+            let hasInvalidDeployment = false;
+
+            for (let [key, data] of deployment) {
+                totalForces += data.forces;
+                if (!data.direction) {
+                    hasInvalidDeployment = true;
+                    const [x, y] = key.split(',');
+                    alert(`Please select an attack direction for cell (${x}, ${y})!`);
+                    break;
+                }
             }
+
+            if (hasInvalidDeployment) return;
 
             if (totalForces === 0) {
                 alert('You must deploy at least some forces!');
@@ -879,6 +1066,7 @@
             }
 
             gameState.selectedSegment = null;
+            gameState.selectedDirection = null;
             document.getElementById('segmentEditor').classList.add('hidden');
             stopStrobing();
 
@@ -908,167 +1096,215 @@
             gameState.player2Deployment = new Map();
 
             let remainingForces = FORCES_PER_TURN + gameState.player2Momentum;
-            const segments = Array.from(gameState.frontlineSegments);
+            const aiCells = Array.from(gameState.frontlineCells).filter(key => {
+                const [x, y] = key.split(',').map(Number);
+                return gameState.grid[y][x] === 2;
+            });
 
-            if (difficulty === 'easy') {
-                while (remainingForces > 0 && segments.length > 0) {
-                    const segment = segments[Math.floor(Math.random() * segments.length)];
-                    const current = gameState.player2Deployment.get(segment) || 0;
+            if (aiCells.length === 0) return;
 
-                    if (current < MAX_FORCES_PER_SEGMENT) {
-                        const amount = Math.min(
-                            Math.floor(Math.random() * 10) + 1,
-                            MAX_FORCES_PER_SEGMENT - current,
-                            remainingForces
-                        );
-                        gameState.player2Deployment.set(segment, current + amount);
-                        remainingForces -= amount;
+            while (remainingForces > 0) {
+                const cell = aiCells[Math.floor(Math.random() * aiCells.length)];
+                const [x, y] = cell.split(',').map(Number);
+                const availableDirections = getAvailableDirections(x, y);
+
+                if (availableDirections.length === 0) continue;
+
+                const currentData = gameState.player2Deployment.get(cell) || {forces: 0, direction: null};
+
+                if (currentData.forces < MAX_FORCES_PER_SEGMENT) {
+                    const amount = Math.min(
+                        Math.floor(Math.random() * 5) + 1,
+                        MAX_FORCES_PER_SEGMENT - currentData.forces,
+                        remainingForces
+                    );
+
+                    if (!currentData.direction) {
+                        currentData.direction = availableDirections[Math.floor(Math.random() * availableDirections.length)];
                     }
-                }
-            } else if (difficulty === 'medium') {
-                const forcesPerSegment = Math.floor(remainingForces / segments.length);
 
-                segments.forEach(segment => {
-                    const amount = Math.min(forcesPerSegment, MAX_FORCES_PER_SEGMENT);
-                    if (amount > 0) {
-                        gameState.player2Deployment.set(segment, amount);
-                        remainingForces -= amount;
-                    }
-                });
-
-                while (remainingForces > 0) {
-                    const segment = segments[Math.floor(Math.random() * segments.length)];
-                    const current = gameState.player2Deployment.get(segment) || 0;
-                    if (current < MAX_FORCES_PER_SEGMENT) {
-                        gameState.player2Deployment.set(segment, current + 1);
-                        remainingForces--;
-                    } else {
-                        break;
-                    }
-                }
-            } else {
-                const priorities = segments.map(seg => {
-                    const p1Force = gameState.player1Deployment.get(seg) || 0;
-                    return { seg, force: p1Force };
-                }).sort((a, b) => a.force - b.force);
-
-                const targetCount = Math.min(10, segments.length);
-                const targets = priorities.slice(0, targetCount).map(p => p.seg);
-                const forcePerTarget = Math.floor(remainingForces / targets.length);
-
-                targets.forEach(seg => {
-                    const amount = Math.min(forcePerTarget, MAX_FORCES_PER_SEGMENT);
-                    gameState.player2Deployment.set(seg, amount);
+                    currentData.forces += amount;
+                    gameState.player2Deployment.set(cell, currentData);
                     remainingForces -= amount;
-                });
-
-                while (remainingForces > 0) {
-                    const seg = targets[Math.floor(Math.random() * targets.length)];
-                    const current = gameState.player2Deployment.get(seg) || 0;
-                    if (current < MAX_FORCES_PER_SEGMENT) {
-                        gameState.player2Deployment.set(seg, current + 1);
-                        remainingForces--;
-                    } else {
-                        break;
-                    }
                 }
+
+                if (remainingForces < 5) break;
+            }
+        }
+
+        function createExplosion(x, y, isPlayerWin) {
+            const centerX = x * CELL_SIZE + CELL_SIZE / 2;
+            const centerY = y * CELL_SIZE + CELL_SIZE / 2;
+            const color = isPlayerWin ? '#ffaa00' : '#ff4444';
+
+            for (let i = 0; i < 15; i++) {
+                gameState.particles.push(new Particle(centerX, centerY, color));
             }
         }
 
         function resolveTurn() {
-            document.getElementById('phaseDisplay').textContent = 'Resolving Combat...';
+            document.getElementById('phaseDisplay').textContent = 'Revealing Forces...';
 
-            const newFrontline = [...gameState.frontline];
-            let player1Advances = 0;
-            let player2Advances = 0;
+            // Show both players' forces
+            setTimeout(() => {
+                renderWithBothForces();
 
-            for (let y = 0; y < GRID_HEIGHT; y++) {
-                const x = gameState.frontline[y];
-                const key = `${x},${y}`;
+                setTimeout(() => {
+                    document.getElementById('phaseDisplay').textContent = 'Resolving Combat...';
 
-                const p1Force = gameState.player1Deployment.get(key) || 0;
-                const p2Force = gameState.player2Deployment.get(key) || 0;
+                    const battles = [];
 
-                if (p1Force > p2Force) {
-                    newFrontline[y] = Math.min(newFrontline[y] + 1, GRID_WIDTH - 1);
-                    player1Advances++;
-                } else if (p2Force > p1Force) {
-                    newFrontline[y] = Math.max(newFrontline[y] - 1, 0);
-                    player2Advances++;
+                    // Process each player 1 deployment
+                    for (let [key, data] of gameState.player1Deployment) {
+                        const [x, y] = key.split(',').map(Number);
+                        const {dx, dy} = getDirOffset(data.direction);
+                        const targetX = x + dx;
+                        const targetY = y + dy;
+
+                        if (targetX >= 0 && targetX < GRID_WIDTH && targetY >= 0 && targetY < GRID_HEIGHT) {
+                            const targetKey = `${targetX},${targetY}`;
+                            const enemyData = gameState.player2Deployment.get(targetKey);
+                            const enemyForces = enemyData ? enemyData.forces : 0;
+
+                            battles.push({
+                                x: targetX,
+                                y: targetY,
+                                p1Forces: data.forces,
+                                p2Forces: enemyForces,
+                                winner: data.forces > enemyForces ? 1 : (enemyForces > data.forces ? 2 : 0)
+                            });
+                        }
+                    }
+
+                    // Process each player 2 deployment
+                    for (let [key, data] of gameState.player2Deployment) {
+                        const [x, y] = key.split(',').map(Number);
+                        const {dx, dy} = getDirOffset(data.direction);
+                        const targetX = x + dx;
+                        const targetY = y + dy;
+
+                        if (targetX >= 0 && targetX < GRID_WIDTH && targetY >= 0 && targetY < GRID_HEIGHT) {
+                            const targetKey = `${targetX},${targetY}`;
+
+                            // Check if this battle was already processed
+                            const existingBattle = battles.find(b => b.x === targetX && b.y === targetY);
+                            if (!existingBattle) {
+                                const enemyData = gameState.player1Deployment.get(targetKey);
+                                const enemyForces = enemyData ? enemyData.forces : 0;
+
+                                battles.push({
+                                    x: targetX,
+                                    y: targetY,
+                                    p1Forces: enemyForces,
+                                    p2Forces: data.forces,
+                                    winner: enemyForces > data.forces ? 1 : (data.forces > enemyForces ? 2 : 0)
+                                });
+                            }
+                        }
+                    }
+
+                    // Animate battles
+                    animateBattles(battles, () => {
+                        finalizeTurn();
+                    });
+                }, 1500);
+            }, 500);
+        }
+
+        function getDirOffset(dir) {
+            const offsets = {
+                'up': {dx: 0, dy: -1},
+                'down': {dx: 0, dy: 1},
+                'left': {dx: -1, dy: 0},
+                'right': {dx: 1, dy: 0}
+            };
+            return offsets[dir] || {dx: 0, dy: 0};
+        }
+
+        function animateBattles(battles, callback) {
+            let battleIndex = 0;
+
+            function processBattle() {
+                if (battleIndex >= battles.length) {
+                    // Animate particles
+                    animateParticles(callback);
+                    return;
+                }
+
+                const battle = battles[battleIndex];
+
+                if (battle.winner !== 0) {
+                    createExplosion(battle.x, battle.y, battle.winner === 1);
+                    gameState.grid[battle.y][battle.x] = battle.winner;
+                }
+
+                render();
+                battleIndex++;
+                setTimeout(processBattle, 100);
+            }
+
+            processBattle();
+        }
+
+        function animateParticles(callback) {
+            let frameCount = 0;
+            const maxFrames = 60;
+
+            function animate() {
+                gameState.particles = gameState.particles.filter(p => p.update());
+                render();
+
+                frameCount++;
+                if (frameCount < maxFrames && gameState.particles.length > 0) {
+                    requestAnimationFrame(animate);
+                } else {
+                    gameState.particles = [];
+                    callback();
                 }
             }
 
-            // Smooth the frontline for continuity
-            const smoothedFrontline = smoothFrontline(newFrontline);
-
-            gameState.player1Momentum = player1Advances * MOMENTUM_BONUS_PER_SEGMENT;
-            gameState.player2Momentum = player2Advances * MOMENTUM_BONUS_PER_SEGMENT;
-
-            animateFrontlineChange(smoothedFrontline, () => {
-                gameState.frontline = smoothedFrontline;
-                updateTerritories();
-                identifyFrontlineSegments();
-
-                const territories = calculateTerritories();
-                if (territories.player1 >= VICTORY_THRESHOLD) {
-                    showVictory(1, territories);
-                    return;
-                } else if (territories.player2 >= VICTORY_THRESHOLD) {
-                    showVictory(2, territories);
-                    return;
-                }
-
-                gameState.turn++;
-                gameState.currentPlayer = 1;
-                gameState.player1Deployment = new Map();
-                gameState.player2Deployment = new Map();
-                gameState.player1Scouted = new Set();
-                gameState.player2Scouted = new Set();
-                gameState.scoutingMode = false;
-                gameState.selectedSegment = null;
-
-                document.getElementById('segmentEditor').classList.add('hidden');
-                stopStrobing();
-
-                updateUI();
-
-                if (gameState.gameMode === 'ai') {
-                    document.getElementById('phaseDisplay').textContent = 'Your Turn - Deployment Phase';
-                    document.getElementById('confirmBtn').disabled = false;
-                } else {
-                    document.getElementById('phaseDisplay').textContent = 'Player 1 - Deployment Phase';
-                }
-
-                render();
-            });
+            animate();
         }
 
-        function animateFrontlineChange(newFrontline, callback) {
-            let frame = 0;
-            const frames = 10;
-            const oldFrontline = [...gameState.frontline];
+        function finalizeTurn() {
+            identifyFrontlineCells();
 
-            const animate = () => {
-                frame++;
-                const progress = frame / frames;
+            const territories = calculateTerritories();
+            if (territories.player1 >= VICTORY_THRESHOLD) {
+                showVictory(1, territories);
+                return;
+            } else if (territories.player2 >= VICTORY_THRESHOLD) {
+                showVictory(2, territories);
+                return;
+            }
 
-                for (let y = 0; y < GRID_HEIGHT; y++) {
-                    const start = oldFrontline[y];
-                    const end = newFrontline[y];
-                    gameState.frontline[y] = Math.round(start + (end - start) * progress);
-                }
+            gameState.turn++;
+            gameState.currentPlayer = 1;
 
-                updateTerritories();
-                render();
+            gameState.player1Momentum = gameState.player1Deployment.size * MOMENTUM_BONUS_PER_SEGMENT;
+            gameState.player2Momentum = gameState.player2Deployment.size * MOMENTUM_BONUS_PER_SEGMENT;
 
-                if (frame < frames) {
-                    requestAnimationFrame(animate);
-                } else {
-                    callback();
-                }
-            };
+            gameState.player1Deployment = new Map();
+            gameState.player2Deployment = new Map();
+            gameState.player1Scouted = new Set();
+            gameState.player2Scouted = new Set();
+            gameState.scoutingMode = false;
+            gameState.selectedSegment = null;
+            gameState.selectedDirection = null;
 
-            animate();
+            document.getElementById('segmentEditor').classList.add('hidden');
+            stopStrobing();
+
+            updateUI();
+
+            if (gameState.gameMode === 'ai') {
+                document.getElementById('phaseDisplay').textContent = 'Your Turn - Deployment Phase';
+                document.getElementById('confirmBtn').disabled = false;
+            } else {
+                document.getElementById('phaseDisplay').textContent = 'Player 1 - Deployment Phase';
+            }
+
+            render();
         }
 
         function calculateTerritories() {
@@ -1102,8 +1338,8 @@
                 gameState.player1Momentum : gameState.player2Momentum;
 
             let totalDeployed = 0;
-            for (let val of deployment.values()) {
-                totalDeployed += val;
+            for (let data of deployment.values()) {
+                totalDeployed += data.forces;
             }
 
             const remaining = FORCES_PER_TURN + momentum - totalDeployed;
@@ -1134,33 +1370,31 @@
                     } else if (cellValue === 2) {
                         ctx.fillStyle = 'rgba(245, 87, 108, 0.6)';
                     } else {
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                        ctx.fillStyle = 'rgba(50, 50, 50, 0.6)';
                     }
 
                     ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
                 }
             }
 
-            // Draw frontline with strobing on selected segment
-            ctx.lineWidth = 2;
-            const strobePhase = Date.now() % 600 < 300;
-
-            for (let y = 0; y < GRID_HEIGHT; y++) {
-                const x = gameState.frontline[y];
-                const key = `${x},${y}`;
-
-                if (gameState.selectedSegment === key && gameState.strobeInterval) {
-                    ctx.strokeStyle = strobePhase ? '#00ff00' : '#00d4ff';
-                    ctx.lineWidth = strobePhase ? 3 : 2;
-                } else {
-                    ctx.strokeStyle = '#00d4ff';
-                    ctx.lineWidth = 2;
-                }
-
+            // Draw frontline cells
+            ctx.strokeStyle = 'rgba(0, 212, 255, 0.4)';
+            ctx.lineWidth = 1;
+            for (let key of gameState.frontlineCells) {
+                const [x, y] = key.split(',').map(Number);
                 ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
             }
 
-            // Draw deployment numbers
+            // Draw selected cell with strobing
+            if (gameState.selectedSegment && gameState.strobeInterval) {
+                const [x, y] = gameState.selectedSegment.split(',').map(Number);
+                const strobePhase = Date.now() % 600 < 300;
+                ctx.strokeStyle = strobePhase ? '#00ff00' : '#00d4ff';
+                ctx.lineWidth = strobePhase ? 4 : 2;
+                ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
+            }
+
+            // Draw current player deployments
             const deployment = gameState.currentPlayer === 1 ?
                 gameState.player1Deployment : gameState.player2Deployment;
 
@@ -1168,17 +1402,108 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            for (let [key, forces] of deployment) {
-                if (forces > 0) {
-                    const [x, y] = key.split(',').map(Number);
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                    ctx.fillRect(x * CELL_SIZE + 2, y * CELL_SIZE + 2, CELL_SIZE - 5, CELL_SIZE - 5);
-                    ctx.fillStyle = '#00ff00';
-                    ctx.fillText(forces.toString(),
-                        x * CELL_SIZE + CELL_SIZE / 2,
-                        y * CELL_SIZE + CELL_SIZE / 2);
+            for (let [key, data] of deployment) {
+                const [x, y] = key.split(',').map(Number);
+
+                // Draw forces number
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(x * CELL_SIZE + 2, y * CELL_SIZE + 2, CELL_SIZE - 5, CELL_SIZE - 5);
+                ctx.fillStyle = '#00ff00';
+                ctx.fillText(data.forces.toString(),
+                    x * CELL_SIZE + CELL_SIZE / 2,
+                    y * CELL_SIZE + CELL_SIZE / 2);
+
+                // Draw direction arrow
+                if (data.direction) {
+                    drawDirectionArrow(x, y, data.direction);
                 }
             }
+
+            // Draw particles
+            for (let particle of gameState.particles) {
+                particle.draw(ctx);
+            }
+        }
+
+        function renderWithBothForces() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    const cellValue = gameState.grid[y][x];
+
+                    if (cellValue === 1) {
+                        ctx.fillStyle = 'rgba(102, 126, 234, 0.6)';
+                    } else if (cellValue === 2) {
+                        ctx.fillStyle = 'rgba(245, 87, 108, 0.6)';
+                    } else {
+                        ctx.fillStyle = 'rgba(50, 50, 50, 0.6)';
+                    }
+
+                    ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
+                }
+            }
+
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Draw both players' deployments
+            for (let [key, data] of gameState.player1Deployment) {
+                const [x, y] = key.split(',').map(Number);
+                ctx.fillStyle = 'rgba(102, 126, 234, 0.9)';
+                ctx.fillRect(x * CELL_SIZE + 2, y * CELL_SIZE + 2, CELL_SIZE - 5, CELL_SIZE - 5);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(data.forces.toString(),
+                    x * CELL_SIZE + CELL_SIZE / 2,
+                    y * CELL_SIZE + CELL_SIZE / 2);
+                if (data.direction) {
+                    drawDirectionArrow(x, y, data.direction);
+                }
+            }
+
+            for (let [key, data] of gameState.player2Deployment) {
+                const [x, y] = key.split(',').map(Number);
+                ctx.fillStyle = 'rgba(245, 87, 108, 0.9)';
+                ctx.fillRect(x * CELL_SIZE + 2, y * CELL_SIZE + 2, CELL_SIZE - 5, CELL_SIZE - 5);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(data.forces.toString(),
+                    x * CELL_SIZE + CELL_SIZE / 2,
+                    y * CELL_SIZE + CELL_SIZE / 2);
+                if (data.direction) {
+                    drawDirectionArrow(x, y, data.direction);
+                }
+            }
+        }
+
+        function drawDirectionArrow(x, y, direction) {
+            const centerX = x * CELL_SIZE + CELL_SIZE / 2;
+            const centerY = y * CELL_SIZE + CELL_SIZE / 2;
+
+            ctx.save();
+            ctx.strokeStyle = '#ffff00';
+            ctx.fillStyle = '#ffff00';
+            ctx.lineWidth = 2;
+
+            let angle = 0;
+            if (direction === 'right') angle = 0;
+            else if (direction === 'down') angle = Math.PI / 2;
+            else if (direction === 'left') angle = Math.PI;
+            else if (direction === 'up') angle = -Math.PI / 2;
+
+            ctx.translate(centerX, centerY);
+            ctx.rotate(angle);
+
+            // Arrow
+            ctx.beginPath();
+            ctx.moveTo(8, 0);
+            ctx.lineTo(3, -3);
+            ctx.lineTo(3, 3);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
         }
 
         function showVictory(winner, territories) {
