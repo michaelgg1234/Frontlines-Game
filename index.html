@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontlines - Strategy Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #00d4ff;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .game-container {
+            max-width: 1400px;
+            width: 100%;
+        }
+
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .player-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .player-badge {
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .player1-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.5);
+        }
+
+        .player2-badge {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            box-shadow: 0 0 15px rgba(245, 87, 108, 0.5);
+        }
+
+        .territory-display {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .territory-item {
+            text-align: center;
+        }
+
+        .territory-label {
+            font-size: 0.9em;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+
+        .territory-value {
+            font-size: 1.4em;
+            font-weight: bold;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+
+        .canvas-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            background: #0a0a0a;
+            cursor: crosshair;
+        }
+
+        .control-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .section {
+            margin-bottom: 25px;
+        }
+
+        .section-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #00d4ff;
+            border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+            padding-bottom: 8px;
+        }
+
+        .forces-remaining {
+            font-size: 1.5em;
+            font-weight: bold;
+            text-align: center;
+            padding: 15px;
+            background: rgba(0, 212, 255, 0.1);
+            border-radius: 5px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+        }
+
+        .forces-number {
+            color: #00d4ff;
+            font-size: 1.3em;
+        }
+
+        .deployment-controls {
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .deployment-controls::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .deployment-controls::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+
+        .deployment-controls::-webkit-scrollbar-thumb {
+            background: rgba(0, 212, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        .segment-control {
+            margin-bottom: 12px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .segment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .segment-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .segment-value {
+            font-weight: bold;
+            color: #00d4ff;
+            font-size: 1.1em;
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #00d4ff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #00d4ff;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        button {
+            padding: 12px 20px;
+            font-size: 1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
+            color: #000;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .scouting-section {
+            padding: 15px;
+            background: rgba(255, 193, 7, 0.1);
+            border-radius: 5px;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+
+        .scouting-info {
+            font-size: 0.9em;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .menu-content {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            border: 2px solid rgba(0, 212, 255, 0.5);
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+            max-width: 500px;
+        }
+
+        .menu-title {
+            font-size: 2.5em;
+            color: #00d4ff;
+            margin-bottom: 30px;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .menu-button {
+            width: 100%;
+            margin: 10px 0;
+            padding: 15px;
+            font-size: 1.1em;
+        }
+
+        .victory-screen {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 50px;
+            border-radius: 15px;
+            text-align: center;
+            border: 2px solid rgba(0, 212, 255, 0.5);
+            box-shadow: 0 0 50px rgba(0, 212, 255, 0.5);
+        }
+
+        .victory-title {
+            font-size: 3em;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.8);
+        }
+
+        .victory-stats {
+            font-size: 1.3em;
+            margin: 20px 0;
+            opacity: 0.9;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .game-mode-select {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .ai-difficulty {
+            margin-top: 20px;
+        }
+
+        .difficulty-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .difficulty-btn {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: #e0e0e0;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .difficulty-btn.active {
+            background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
+            border-color: #00d4ff;
+            color: #000;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+        }
+
+        .momentum-display {
+            padding: 10px;
+            background: rgba(76, 175, 80, 0.1);
+            border-radius: 5px;
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .momentum-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .momentum-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #4caf50;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .animating {
+            animation: pulse 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <h1>⚔️ FRONTLINES ⚔️</h1>
+
+    <!-- Main Menu -->
+    <div id="mainMenu" class="menu-overlay">
+        <div class="menu-content">
+            <div class="menu-title">FRONTLINES</div>
+            <p style="margin-bottom: 30px; opacity: 0.8;">A turn-based strategy game of force deployment and territorial control</p>
+
+            <div class="game-mode-select">
+                <button class="menu-button btn-primary" onclick="startGame('pvp')">2 Player Local</button>
+                <button class="menu-button btn-primary" onclick="showAIDifficulty()">vs AI</button>
+            </div>
+
+            <div id="aiDifficultySection" class="ai-difficulty hidden">
+                <p style="margin-bottom: 10px;">Select AI Difficulty:</p>
+                <div class="difficulty-buttons">
+                    <button class="difficulty-btn" onclick="selectDifficulty('easy')">Easy</button>
+                    <button class="difficulty-btn" onclick="selectDifficulty('medium')">Medium</button>
+                    <button class="difficulty-btn" onclick="selectDifficulty('hard')">Hard</button>
+                </div>
+                <button class="menu-button btn-primary" style="margin-top: 15px;" onclick="startAIGame()">Start Game</button>
+            </div>
+
+            <div style="margin-top: 20px; font-size: 0.9em; opacity: 0.7;">
+                <p><strong>Quick Rules:</strong></p>
+                <p>• Deploy 100 forces across 20 segments each turn</p>
+                <p>• Max 25 forces per segment</p>
+                <p>• Win by controlling 75% of territory</p>
+                <p>• Use momentum bonuses and scouting wisely</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Victory Screen -->
+    <div id="victoryScreen" class="menu-overlay hidden">
+        <div class="victory-screen">
+            <div class="victory-title" id="victoryTitle">VICTORY!</div>
+            <div class="victory-stats" id="victoryStats"></div>
+            <button class="menu-button btn-primary" onclick="location.reload()">Play Again</button>
+        </div>
+    </div>
+
+    <!-- Game Container -->
+    <div id="gameContainer" class="game-container hidden">
+        <!-- Info Bar -->
+        <div class="info-bar">
+            <div class="player-info">
+                <div class="player-badge player1-badge" id="player1Badge">Player 1</div>
+                <div class="territory-display">
+                    <div class="territory-item">
+                        <div class="territory-label">Territory</div>
+                        <div class="territory-value" id="player1Territory">50%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <div style="font-size: 1.3em; font-weight: bold; color: #00d4ff;">Turn <span id="turnNumber">1</span></div>
+                <div style="font-size: 0.9em; opacity: 0.7;" id="phaseDisplay">Deployment Phase</div>
+            </div>
+
+            <div class="player-info">
+                <div class="territory-display">
+                    <div class="territory-item">
+                        <div class="territory-label">Territory</div>
+                        <div class="territory-value" id="player2Territory">50%</div>
+                    </div>
+                </div>
+                <div class="player-badge player2-badge" id="player2Badge">Player 2</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Canvas -->
+            <div class="canvas-container">
+                <canvas id="gameCanvas" width="600" height="900"></canvas>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <div class="section">
+                    <div class="section-title">Deployment</div>
+
+                    <div class="momentum-display" id="momentumDisplay">
+                        <div class="momentum-label">Momentum Bonus</div>
+                        <div class="momentum-value" id="momentumValue">+0 forces</div>
+                    </div>
+
+                    <div class="forces-remaining">
+                        Forces Remaining: <span class="forces-number" id="forcesRemaining">100</span>
+                    </div>
+
+                    <div class="deployment-controls" id="deploymentControls">
+                        <!-- Sliders will be generated here -->
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Actions</div>
+
+                    <div class="scouting-section">
+                        <div class="scouting-info">
+                            🔍 Scout enemy forces (costs 10 points)
+                        </div>
+                        <div style="font-size: 0.85em; margin-bottom: 10px; opacity: 0.7;">
+                            Click on frontline to scout that segment
+                        </div>
+                        <div id="scoutingMode" style="font-weight: bold; color: #ffc107;">
+                            Scouting: OFF
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button class="btn-secondary" onclick="toggleScouting()">Toggle Scouting</button>
+                        <button class="btn-secondary" onclick="resetDeployment()">Reset Forces</button>
+                        <button class="btn-primary" id="confirmBtn" onclick="confirmDeployment()">Confirm Deployment</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game Constants
+        const GRID_WIDTH = 20;
+        const GRID_HEIGHT = 30;
+        const TOTAL_CELLS = GRID_WIDTH * GRID_HEIGHT;
+        const CELL_SIZE = 30;
+        const FORCES_PER_TURN = 100;
+        const MAX_FORCES_PER_SEGMENT = 25;
+        const VICTORY_THRESHOLD = 0.75;
+        const SCOUTING_COST = 10;
+        const MOMENTUM_BONUS_PER_SEGMENT = 10;
+
+        // Game State
+        let gameState = {
+            grid: [],
+            frontline: [],
+            turn: 1,
+            currentPlayer: 1,
+            player1Deployment: [],
+            player2Deployment: [],
+            player1Scouted: [],
+            player2Scouted: [],
+            player1Momentum: 0,
+            player2Momentum: 0,
+            scoutingMode: false,
+            gameMode: 'pvp', // 'pvp' or 'ai'
+            aiDifficulty: 'medium',
+            waitingForPlayer: false
+        };
+
+        // Canvas
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Initialize Game
+        function initGame() {
+            // Initialize grid (1 = Player 1 territory, 2 = Player 2 territory)
+            gameState.grid = Array(GRID_HEIGHT).fill(null).map(() => Array(GRID_WIDTH).fill(0));
+
+            // Initialize frontline down the middle
+            gameState.frontline = Array(GRID_HEIGHT).fill(Math.floor(GRID_WIDTH / 2));
+
+            // Set initial territories
+            updateTerritories();
+
+            // Initialize deployments
+            gameState.player1Deployment = Array(GRID_HEIGHT).fill(0);
+            gameState.player2Deployment = Array(GRID_HEIGHT).fill(0);
+            gameState.player1Scouted = Array(GRID_HEIGHT).fill(false);
+            gameState.player2Scouted = Array(GRID_HEIGHT).fill(false);
+
+            // Create deployment controls
+            createDeploymentControls();
+
+            // Initial render
+            render();
+            updateUI();
+        }
+
+        function updateTerritories() {
+            // Update grid based on frontline
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    if (x < gameState.frontline[y]) {
+                        gameState.grid[y][x] = 1; // Player 1 territory
+                    } else if (x > gameState.frontline[y]) {
+                        gameState.grid[y][x] = 2; // Player 2 territory
+                    } else {
+                        gameState.grid[y][x] = 0; // Frontline
+                    }
+                }
+            }
+        }
+
+        function createDeploymentControls() {
+            const container = document.getElementById('deploymentControls');
+            container.innerHTML = '';
+
+            for (let i = 0; i < GRID_HEIGHT; i++) {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'segment-control';
+
+                const header = document.createElement('div');
+                header.className = 'segment-header';
+
+                const label = document.createElement('span');
+                label.className = 'segment-label';
+                label.textContent = `Segment ${i + 1}`;
+
+                const value = document.createElement('span');
+                value.className = 'segment-value';
+                value.id = `segment-value-${i}`;
+                value.textContent = '0';
+
+                header.appendChild(label);
+                header.appendChild(value);
+
+                const slider = document.createElement('input');
+                slider.type = 'range';
+                slider.className = 'slider';
+                slider.min = '0';
+                slider.max = MAX_FORCES_PER_SEGMENT;
+                slider.value = '0';
+                slider.id = `slider-${i}`;
+                slider.addEventListener('input', (e) => updateDeployment(i, parseInt(e.target.value)));
+
+                segmentDiv.appendChild(header);
+                segmentDiv.appendChild(slider);
+                container.appendChild(segmentDiv);
+            }
+        }
+
+        function updateDeployment(segment, value) {
+            const currentPlayer = gameState.currentPlayer;
+            const deployment = currentPlayer === 1 ? gameState.player1Deployment : gameState.player2Deployment;
+            const momentum = currentPlayer === 1 ? gameState.player1Momentum : gameState.player2Momentum;
+
+            // Calculate current total
+            let total = deployment.reduce((sum, val, idx) => idx === segment ? sum : sum + val, 0);
+
+            // Check if new value would exceed total available forces
+            const availableForces = FORCES_PER_TURN + momentum;
+            if (total + value > availableForces) {
+                value = availableForces - total;
+                document.getElementById(`slider-${segment}`).value = value;
+            }
+
+            deployment[segment] = value;
+            document.getElementById(`segment-value-${segment}`).textContent = value;
+
+            updateUI();
+        }
+
+        function resetDeployment() {
+            const deployment = gameState.currentPlayer === 1 ? gameState.player1Deployment : gameState.player2Deployment;
+
+            for (let i = 0; i < GRID_HEIGHT; i++) {
+                deployment[i] = 0;
+                document.getElementById(`slider-${i}`).value = 0;
+                document.getElementById(`segment-value-${i}`).textContent = '0';
+            }
+
+            updateUI();
+        }
+
+        function toggleScouting() {
+            gameState.scoutingMode = !gameState.scoutingMode;
+            document.getElementById('scoutingMode').textContent =
+                gameState.scoutingMode ? 'Scouting: ON (click frontline)' : 'Scouting: OFF';
+            document.getElementById('scoutingMode').style.color =
+                gameState.scoutingMode ? '#4caf50' : '#ffc107';
+        }
+
+        function confirmDeployment() {
+            const deployment = gameState.currentPlayer === 1 ? gameState.player1Deployment : gameState.player2Deployment;
+            const momentum = gameState.currentPlayer === 1 ? gameState.player1Momentum : gameState.player2Momentum;
+            const totalForces = deployment.reduce((sum, val) => sum + val, 0);
+
+            if (totalForces === 0) {
+                alert('You must deploy at least some forces!');
+                return;
+            }
+
+            // If in AI mode and current player is 1, switch to AI turn
+            if (gameState.gameMode === 'ai' && gameState.currentPlayer === 1) {
+                gameState.currentPlayer = 2;
+                gameState.waitingForPlayer = false;
+
+                // Disable controls during AI turn
+                document.getElementById('confirmBtn').disabled = true;
+                document.getElementById('phaseDisplay').textContent = 'AI Thinking...';
+
+                setTimeout(() => {
+                    aiMakeMove();
+                    resolveTurn();
+                }, 1000);
+            } else if (gameState.currentPlayer === 1) {
+                // PvP mode, switch to player 2
+                gameState.currentPlayer = 2;
+                resetDeploymentUI();
+                updateUI();
+                document.getElementById('phaseDisplay').textContent = 'Player 2 - Deployment Phase';
+            } else {
+                // Player 2 confirmed, resolve turn
+                resolveTurn();
+            }
+        }
+
+        function aiMakeMove() {
+            const difficulty = gameState.aiDifficulty;
+            gameState.player2Deployment = Array(GRID_HEIGHT).fill(0);
+
+            let remainingForces = FORCES_PER_TURN + gameState.player2Momentum;
+
+            if (difficulty === 'easy') {
+                // Random deployment
+                while (remainingForces > 0) {
+                    const segment = Math.floor(Math.random() * GRID_HEIGHT);
+                    if (gameState.player2Deployment[segment] < MAX_FORCES_PER_SEGMENT) {
+                        const amount = Math.min(
+                            Math.floor(Math.random() * 10) + 1,
+                            MAX_FORCES_PER_SEGMENT - gameState.player2Deployment[segment],
+                            remainingForces
+                        );
+                        gameState.player2Deployment[segment] += amount;
+                        remainingForces -= amount;
+                    }
+                }
+            } else if (difficulty === 'medium') {
+                // Defensive strategy - reinforce weak points
+                const forcesPerSegment = Math.floor(remainingForces / GRID_HEIGHT);
+                const extra = remainingForces % GRID_HEIGHT;
+
+                for (let i = 0; i < GRID_HEIGHT; i++) {
+                    gameState.player2Deployment[i] = Math.min(forcesPerSegment, MAX_FORCES_PER_SEGMENT);
+                }
+
+                // Add extra to random segments
+                for (let i = 0; i < extra; i++) {
+                    const segment = Math.floor(Math.random() * GRID_HEIGHT);
+                    if (gameState.player2Deployment[segment] < MAX_FORCES_PER_SEGMENT) {
+                        gameState.player2Deployment[segment]++;
+                    }
+                }
+            } else {
+                // Aggressive strategy - focus on weak points and concentrate forces
+                // Find segments where player 1 deployed least
+                const player1Deploy = gameState.player1Deployment;
+                const priorities = player1Deploy.map((force, idx) => ({ idx, force }))
+                    .sort((a, b) => a.force - b.force);
+
+                // Concentrate on top 10 weakest segments
+                const targetSegments = priorities.slice(0, 10).map(p => p.idx);
+                const forcePerTarget = Math.floor(remainingForces / targetSegments.length);
+
+                targetSegments.forEach(segment => {
+                    gameState.player2Deployment[segment] = Math.min(
+                        forcePerTarget,
+                        MAX_FORCES_PER_SEGMENT
+                    );
+                });
+
+                // Distribute remaining
+                let remaining = remainingForces - targetSegments.reduce((sum, seg) =>
+                    sum + gameState.player2Deployment[seg], 0);
+
+                while (remaining > 0) {
+                    const segment = targetSegments[Math.floor(Math.random() * targetSegments.length)];
+                    if (gameState.player2Deployment[segment] < MAX_FORCES_PER_SEGMENT) {
+                        gameState.player2Deployment[segment]++;
+                        remaining--;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        function resolveTurn() {
+            document.getElementById('phaseDisplay').textContent = 'Resolving Combat...';
+
+            // Calculate new frontline positions
+            const newFrontline = [...gameState.frontline];
+            let player1Advances = 0;
+            let player2Advances = 0;
+
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                const p1Force = gameState.player1Deployment[y];
+                const p2Force = gameState.player2Deployment[y];
+
+                if (p1Force > p2Force) {
+                    // Player 1 pushes forward
+                    newFrontline[y] = Math.min(newFrontline[y] + 1, GRID_WIDTH - 1);
+                    player1Advances++;
+                } else if (p2Force > p1Force) {
+                    // Player 2 pushes forward
+                    newFrontline[y] = Math.max(newFrontline[y] - 1, 0);
+                    player2Advances++;
+                }
+                // If equal, no change
+            }
+
+            // Update momentum bonuses
+            gameState.player1Momentum = player1Advances * MOMENTUM_BONUS_PER_SEGMENT;
+            gameState.player2Momentum = player2Advances * MOMENTUM_BONUS_PER_SEGMENT;
+
+            // Animate frontline movement
+            animateFrontlineChange(newFrontline, () => {
+                gameState.frontline = newFrontline;
+                updateTerritories();
+
+                // Check victory condition
+                const territories = calculateTerritories();
+                if (territories.player1 >= VICTORY_THRESHOLD) {
+                    showVictory(1, territories);
+                    return;
+                } else if (territories.player2 >= VICTORY_THRESHOLD) {
+                    showVictory(2, territories);
+                    return;
+                }
+
+                // Next turn
+                gameState.turn++;
+                gameState.currentPlayer = 1;
+                gameState.player1Deployment = Array(GRID_HEIGHT).fill(0);
+                gameState.player2Deployment = Array(GRID_HEIGHT).fill(0);
+                gameState.player1Scouted = Array(GRID_HEIGHT).fill(false);
+                gameState.player2Scouted = Array(GRID_HEIGHT).fill(false);
+                gameState.scoutingMode = false;
+
+                resetDeploymentUI();
+                updateUI();
+
+                if (gameState.gameMode === 'ai') {
+                    document.getElementById('phaseDisplay').textContent = 'Your Turn - Deployment Phase';
+                    document.getElementById('confirmBtn').disabled = false;
+                } else {
+                    document.getElementById('phaseDisplay').textContent = 'Player 1 - Deployment Phase';
+                }
+
+                render();
+            });
+        }
+
+        function animateFrontlineChange(newFrontline, callback) {
+            let frame = 0;
+            const frames = 10;
+            const oldFrontline = [...gameState.frontline];
+
+            const animate = () => {
+                frame++;
+                const progress = frame / frames;
+
+                for (let y = 0; y < GRID_HEIGHT; y++) {
+                    const start = oldFrontline[y];
+                    const end = newFrontline[y];
+                    gameState.frontline[y] = Math.round(start + (end - start) * progress);
+                }
+
+                updateTerritories();
+                render();
+
+                if (frame < frames) {
+                    requestAnimationFrame(animate);
+                } else {
+                    callback();
+                }
+            };
+
+            animate();
+        }
+
+        function resetDeploymentUI() {
+            for (let i = 0; i < GRID_HEIGHT; i++) {
+                document.getElementById(`slider-${i}`).value = 0;
+                document.getElementById(`segment-value-${i}`).textContent = '0';
+            }
+        }
+
+        function calculateTerritories() {
+            let player1Cells = 0;
+            let player2Cells = 0;
+
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    if (gameState.grid[y][x] === 1) player1Cells++;
+                    else if (gameState.grid[y][x] === 2) player2Cells++;
+                }
+            }
+
+            return {
+                player1: player1Cells / TOTAL_CELLS,
+                player2: player2Cells / TOTAL_CELLS
+            };
+        }
+
+        function updateUI() {
+            const territories = calculateTerritories();
+            document.getElementById('player1Territory').textContent =
+                (territories.player1 * 100).toFixed(1) + '%';
+            document.getElementById('player2Territory').textContent =
+                (territories.player2 * 100).toFixed(1) + '%';
+            document.getElementById('turnNumber').textContent = gameState.turn;
+
+            const deployment = gameState.currentPlayer === 1 ?
+                gameState.player1Deployment : gameState.player2Deployment;
+            const momentum = gameState.currentPlayer === 1 ?
+                gameState.player1Momentum : gameState.player2Momentum;
+
+            const totalDeployed = deployment.reduce((sum, val) => sum + val, 0);
+            const remaining = FORCES_PER_TURN + momentum - totalDeployed;
+
+            document.getElementById('forcesRemaining').textContent = remaining;
+            document.getElementById('momentumValue').textContent =
+                momentum > 0 ? `+${momentum} forces` : '+0 forces';
+
+            // Update player badge highlighting
+            if (gameState.currentPlayer === 1) {
+                document.getElementById('player1Badge').style.opacity = '1';
+                document.getElementById('player2Badge').style.opacity = '0.5';
+            } else {
+                document.getElementById('player1Badge').style.opacity = '0.5';
+                document.getElementById('player2Badge').style.opacity = '1';
+            }
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    const cellValue = gameState.grid[y][x];
+
+                    if (cellValue === 1) {
+                        ctx.fillStyle = 'rgba(102, 126, 234, 0.6)'; // Player 1 color
+                    } else if (cellValue === 2) {
+                        ctx.fillStyle = 'rgba(245, 87, 108, 0.6)'; // Player 2 color
+                    } else {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; // Frontline
+                    }
+
+                    ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
+                }
+            }
+
+            // Draw frontline markers
+            ctx.strokeStyle = '#00d4ff';
+            ctx.lineWidth = 2;
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                const x = gameState.frontline[y];
+                ctx.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
+            }
+
+            // Draw deployment indicators
+            const deployment = gameState.currentPlayer === 1 ?
+                gameState.player1Deployment : gameState.player2Deployment;
+
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                if (deployment[y] > 0) {
+                    const x = gameState.frontline[y];
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(x * CELL_SIZE + 2, y * CELL_SIZE + 2, CELL_SIZE - 5, CELL_SIZE - 5);
+                    ctx.fillStyle = '#00ff00';
+                    ctx.fillText(deployment[y].toString(),
+                        x * CELL_SIZE + CELL_SIZE / 2,
+                        y * CELL_SIZE + CELL_SIZE / 2);
+                }
+            }
+        }
+
+        function showVictory(winner, territories) {
+            const victoryScreen = document.getElementById('victoryScreen');
+            const victoryTitle = document.getElementById('victoryTitle');
+            const victoryStats = document.getElementById('victoryStats');
+
+            if (gameState.gameMode === 'ai' && winner === 1) {
+                victoryTitle.textContent = '🎉 VICTORY! 🎉';
+                victoryTitle.style.color = '#00ff00';
+            } else if (gameState.gameMode === 'ai' && winner === 2) {
+                victoryTitle.textContent = '💀 DEFEAT 💀';
+                victoryTitle.style.color = '#ff4444';
+            } else {
+                victoryTitle.textContent = `🎉 PLAYER ${winner} WINS! 🎉`;
+                victoryTitle.style.color = winner === 1 ? '#667eea' : '#f5576c';
+            }
+
+            victoryStats.innerHTML = `
+                <p>Total Turns: ${gameState.turn}</p>
+                <p>Final Territory Control:</p>
+                <p>Player 1: ${(territories.player1 * 100).toFixed(1)}%</p>
+                <p>Player 2: ${(territories.player2 * 100).toFixed(1)}%</p>
+            `;
+
+            victoryScreen.classList.remove('hidden');
+        }
+
+        // Canvas click handler for scouting
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.scoutingMode) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / CELL_SIZE);
+            const y = Math.floor((e.clientY - rect.top) / CELL_SIZE);
+
+            // Check if clicked on frontline
+            if (x === gameState.frontline[y]) {
+                const deployment = gameState.currentPlayer === 1 ?
+                    gameState.player1Deployment : gameState.player2Deployment;
+                const scouted = gameState.currentPlayer === 1 ?
+                    gameState.player1Scouted : gameState.player2Scouted;
+                const enemyDeployment = gameState.currentPlayer === 1 ?
+                    gameState.player2Deployment : gameState.player1Deployment;
+                const momentum = gameState.currentPlayer === 1 ?
+                    gameState.player1Momentum : gameState.player2Momentum;
+
+                // Check if already scouted
+                if (scouted[y]) {
+                    alert('You have already scouted this segment!');
+                    return;
+                }
+
+                // Check if can afford
+                const totalDeployed = deployment.reduce((sum, val) => sum + val, 0);
+                const remaining = FORCES_PER_TURN + momentum - totalDeployed;
+
+                if (remaining < SCOUTING_COST) {
+                    alert('Not enough forces! Scouting costs 10 points.');
+                    return;
+                }
+
+                // Deduct scouting cost from first available segment
+                let costRemaining = SCOUTING_COST;
+                for (let i = GRID_HEIGHT - 1; i >= 0 && costRemaining > 0; i--) {
+                    const reduction = Math.min(deployment[i], costRemaining);
+                    deployment[i] -= reduction;
+                    costRemaining -= reduction;
+                    document.getElementById(`slider-${i}`).value = deployment[i];
+                    document.getElementById(`segment-value-${i}`).textContent = deployment[i];
+                }
+
+                // Mark as scouted and reveal
+                scouted[y] = true;
+                alert(`Enemy forces in segment ${y + 1}: ${enemyDeployment[y]}`);
+
+                gameState.scoutingMode = false;
+                document.getElementById('scoutingMode').textContent = 'Scouting: OFF';
+                document.getElementById('scoutingMode').style.color = '#ffc107';
+
+                updateUI();
+            }
+        });
+
+        // Menu Functions
+        function startGame(mode) {
+            gameState.gameMode = mode;
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('gameContainer').classList.remove('hidden');
+
+            if (mode === 'ai') {
+                document.getElementById('player2Badge').textContent = 'AI';
+                document.getElementById('phaseDisplay').textContent = 'Your Turn - Deployment Phase';
+            } else {
+                document.getElementById('player2Badge').textContent = 'Player 2';
+                document.getElementById('phaseDisplay').textContent = 'Player 1 - Deployment Phase';
+            }
+
+            initGame();
+        }
+
+        function showAIDifficulty() {
+            document.getElementById('aiDifficultySection').classList.remove('hidden');
+        }
+
+        let selectedDifficulty = 'medium';
+
+        function selectDifficulty(difficulty) {
+            selectedDifficulty = difficulty;
+            gameState.aiDifficulty = difficulty;
+
+            // Update button states
+            document.querySelectorAll('.difficulty-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        function startAIGame() {
+            if (!selectedDifficulty) {
+                alert('Please select a difficulty level!');
+                return;
+            }
+            startGame('ai');
+        }
+
+        // Initialize difficulty selection
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.difficulty-btn')[1].classList.add('active');
+        });
+    </script>
+</body>
+</html>
