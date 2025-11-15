@@ -701,9 +701,9 @@
             const midX = Math.floor(GRID_WIDTH / 2);
             for (let y = 0; y < GRID_HEIGHT; y++) {
                 for (let x = 0; x < GRID_WIDTH; x++) {
-                    if (x < midX) {
+                    if (x <= midX) {
                         gameState.grid[y][x] = 1;
-                    } else if (x > midX) {
+                    } else {
                         gameState.grid[y][x] = 2;
                     }
                 }
